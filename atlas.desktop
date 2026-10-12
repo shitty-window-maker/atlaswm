@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Atlas
+Comment=A window manager with a map
+Exec=/usr/local/share/atlas/atlas-session
+Type=Application
+DesktopNames=atlas

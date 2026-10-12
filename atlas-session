@@ -1,0 +1,79 @@
+#!/bin/sh
+# atlas-session — X session entry point
+# called by LightDM or startx. Sets up env, starts panel + WM.
+
+DIR="$(dirname "$(readlink -f "$0")")"
+LOG="${XDG_CACHE_HOME:-$HOME/.cache}/atlas-session.log"
+
+mkdir -p "$(dirname "$LOG")"
+exec 2> "$LOG"
+echo "==== atlas session $(date) ====" >&2
+echo "display=$DISPLAY  dir=$DIR" >&2
+
+# ── env ─────────────────────────────────────────────────────────
+export XDG_CURRENT_DESKTOP=atlas
+export XDG_SESSION_TYPE=x11
+export XDG_SESSION_DESKTOP=atlas
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+export XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
+
+# ── PATH for atlas-status etc. ─────────────────────────────────
+case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+export PATH
+
+# ── dbus ────────────────────────────────────────────────────────
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ] && command -v dbus-launch >/dev/null; then
+    eval "$(dbus-launch --sh-syntax --exit-with-session)"
+    export DBUS_SESSION_BUS_ADDRESS
+fi
+
+# ── tear down anything stale from a previous session ───────────
+rm -f /tmp/atlas.sock
+pkill -x atlas 2>/dev/null
+pkill -x atlas-panel 2>/dev/null
+pkill -x atlas-loop-status 2>/dev/null
+sleep 0.3
+
+# ── optional autostart from atlas config ───────────────────────
+autostart() {
+    [ -f "$1" ] || return
+    # very small parser: run every uncommented line under [autostart]
+    awk '
+        /^\[autostart\]/ { insec=1; next }
+        /^\[/            { insec=0 }
+        insec && !/^[[:space:]]*#/ && NF { print }
+    ' "$1" | while IFS= read -r cmd; do
+        [ -n "$cmd" ] && (eval "$cmd" >/dev/null 2>&1 &)
+    done
+}
+autostart "$HOME/.config/atlas/config"
+
+# ── start the panel, then the WM ────────────────────────────────
+"$DIR/atlas-panel" >/dev/null 2>/tmp/atlas-panel.log &
+PANEL_PID=$!
+
+"$DIR/atlas" >/dev/null 2>/tmp/atlas.log &
+ATLAS_PID=$!
+
+# wait for the WM socket
+i=0
+while [ ! -S /tmp/atlas.sock ]; do
+    i=$((i+1))
+    [ $i -gt 50 ] && { echo "atlas never started" >&2; break; }
+    sleep 0.1
+done
+
+echo "atlas=$ATLAS_PID panel=$PANEL_PID ready" >&2
+
+# ── hold until WM exits ─────────────────────────────────────────
+wait $ATLAS_PID
+
+# ── teardown ────────────────────────────────────────────────────
+echo "wm exited, tearing down" >&2
+kill $PANEL_PID 2>/dev/null
+pkill -x atlas-loop-status 2>/dev/null
+rm -f /tmp/atlas.sock

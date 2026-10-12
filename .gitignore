@@ -1,0 +1,9 @@
+atlas
+atlas-panel
+atlas-ctl
+*.o
+*.bak
+*.broken*
+*.dead
+*.before_*
+*.old
