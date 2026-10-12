@@ -1597,7 +1597,29 @@ int main(int argc, char **argv) {
                 if (ev.xbutton.button == Button1) {
                     Client *c = client_at(ev.xbutton.x_root, ev.xbutton.y_root);
                     if (st & Mod4Mask) {
-                        if (c) start_drag(c, ev.xbutton.x_root, ev.xbutton.y_root);
+                        if (c) {
+                            start_drag(c, ev.xbutton.x_root, ev.xbutton.y_root);
+                        } else {
+                            /* Super+LMB on empty space — pan the map */
+                            int lx = ev.xbutton.x_root, ly = ev.xbutton.y_root;
+                            XGrabPointer(dpy, root, False,
+                                         PointerMotionMask | ButtonReleaseMask,
+                                         GrabModeAsync, GrabModeAsync,
+                                         None, None, CurrentTime);
+                            for (;;) {
+                                XEvent e2; XNextEvent(dpy, &e2);
+                                if (e2.type == MotionNotify) {
+                                    double dx = (e2.xmotion.x_root - lx) / view_zoom;
+                                    double dy = (e2.xmotion.y_root - ly) / view_zoom;
+                                    view_cx -= dx; view_cy -= dy;
+                                    lx = e2.xmotion.x_root;
+                                    ly = e2.xmotion.y_root;
+                                    anim_kill();
+                                    apply_view();
+                                } else if (e2.type == ButtonRelease) break;
+                            }
+                            XUngrabPointer(dpy, CurrentTime);
+                        }
                     } else {
                         XAllowEvents(dpy, ReplayPointer, ev.xbutton.time);
                     }
