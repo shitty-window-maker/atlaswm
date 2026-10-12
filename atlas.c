@@ -474,8 +474,6 @@ static void zoom_at(double nz, int sx, int sy) {
     view_zoom = nz;
     view_cx = px - (sx - SW / 2.0) / view_zoom;
     view_cy = py - (sy - SH / 2.0) / view_zoom;
-    if (view_zoom < card_threshold && !in_card_mode) enter_card_mode();
-    else if (view_zoom >= card_threshold && in_card_mode) enter_real_mode();
     apply_view();
 }
 static void fit_all(void) {
@@ -1107,8 +1105,6 @@ static void anim_tick(void) {
         vel_cx = vel_cy = vel_zoom = 0;
         anim_active = 0;
     }
-    if (view_zoom < card_threshold && !in_card_mode) enter_card_mode();
-    else if (view_zoom >= card_threshold && in_card_mode) enter_real_mode();
     apply_view();
 }
 
